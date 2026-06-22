@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
+import {
+    Shield, X, UserX, KeyRound, Search, LogOut, Plus, Layers, User, Globe, Users,
+    FolderOpen, Trash2, Code2, Database, StickyNote, UserCircle, Copy, CheckCircle, Lock
+} from 'lucide-react';
 
 const ENTRY_TYPES = {
     LOGIN: 'Login',
@@ -52,10 +56,76 @@ const api = {
     searchUsers(q) { return this.request(`/users/search?q=${encodeURIComponent(q)}`); },
 };
 
-const Icon = ({ name, size = 18, className = "" }) => {
-    useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
-    return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
+const ICONS = {
+    shield: Shield,
+    x: X,
+    'user-x': UserX,
+    'key-round': KeyRound,
+    search: Search,
+    'log-out': LogOut,
+    plus: Plus,
+    layers: Layers,
+    user: User,
+    globe: Globe,
+    users: Users,
+    'folder-open': FolderOpen,
+    'trash-2': Trash2,
+    'code-2': Code2,
+    database: Database,
+    'sticky-note': StickyNote,
+    'user-circle': UserCircle,
+    copy: Copy,
+    'check-circle': CheckCircle,
+    lock: Lock,
 };
+
+const Icon = ({ name, size = 18, className = "" }) => {
+    const Cmp = ICONS[name];
+    if (!Cmp) return null;
+    return <Cmp size={size} className={className} strokeWidth={2} />;
+};
+
+async function copyToClipboard(text) {
+    if (!text) return false;
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch {
+        const el = document.createElement('textarea');
+        el.value = text;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        return true;
+    }
+}
+
+const CopyButton = ({ onCopy, label, compact = false }) => (
+    <button
+        type="button"
+        onClick={onCopy}
+        className={`flex items-center gap-1.5 shrink-0 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors ${
+            compact ? 'p-1.5' : 'px-2.5 py-1.5 border border-slate-200 dark:border-slate-700'
+        }`}
+        title={`Copiar ${label}`}
+    >
+        <Icon name="copy" size={14} />
+        {!compact && <span className="text-[10px] font-bold uppercase">Copiar</span>}
+    </button>
+);
+
+const FieldRow = ({ label, display, copyText, copyLabel, onCopy, masked = false }) => (
+    <div className="flex justify-between items-center gap-2">
+        <div className="overflow-hidden flex-1 min-w-0">
+            <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">{label}</p>
+            <p className={`text-sm truncate ${masked ? 'font-mono tracking-widest' : 'font-medium'}`}>
+                {masked ? '••••••••••••' : display}
+            </p>
+        </div>
+        <CopyButton compact label={copyLabel} onCopy={() => onCopy(copyText, copyLabel)} />
+    </div>
+);
 
 const AuthScreen = ({ onAuth }) => {
     const [mode, setMode] = useState('login');
@@ -296,8 +366,34 @@ const App = () => {
         if (user) loadEntries(filter);
     }, [filter, user, loadEntries]);
 
-    const copy = (text, label) => {
-        navigator.clipboard.writeText(text).then(() => showNotification(`${label} copiado!`));
+    const copy = async (text, label) => {
+        if (!text) {
+            showNotification('Nada para copiar.');
+            return;
+        }
+        const ok = await copyToClipboard(text);
+        showNotification(ok ? `${label} copiado!` : 'Erro ao copiar.');
+    };
+
+    const copyLoginAll = (item) => {
+        copy(
+            `Serviço: ${item.service}\nUtilizador: ${item.username}\nSenha: ${item.password}`,
+            'Credenciais completas'
+        );
+    };
+
+    const copyEntryAll = (item) => {
+        let text = '';
+        if (item.type === ENTRY_TYPES.LOGIN) {
+            text = `Serviço: ${item.service}\nUtilizador: ${item.username}\nSenha: ${item.password}`;
+        } else if (item.type === ENTRY_TYPES.API_KEY) {
+            text = `Serviço: ${item.service}\nAPI Key: ${item.key}`;
+        } else if (item.type === ENTRY_TYPES.CONN_STRING) {
+            text = `Serviço: ${item.service}\nConnection String: ${item.connectionString}`;
+        } else if (item.type === ENTRY_TYPES.NOTE) {
+            text = `${item.title}\n\n${item.content}`;
+        }
+        copy(text, 'Registo completo');
     };
 
     const handleLogout = () => {
@@ -432,14 +528,14 @@ const App = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filteredItems.map(item => (
                             <div key={item.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all relative group">
-                                <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="absolute top-4 right-4 flex gap-1">
                                     {item.isOwner && item.visibility === VISIBILITY.PERSONAL && (
-                                        <button onClick={() => setPermissionsEntry(item)} className="text-slate-300 hover:text-indigo-500 p-1" title="Gerir permissões">
+                                        <button onClick={() => setPermissionsEntry(item)} className="text-slate-400 hover:text-indigo-500 p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg" title="Gerir permissões">
                                             <Icon name="users" size={16} />
                                         </button>
                                     )}
                                     {item.isOwner && (
-                                        <button onClick={() => deleteItem(item.id)} className="text-slate-300 hover:text-red-500 p-1" title="Eliminar">
+                                        <button onClick={() => deleteItem(item.id)} className="text-slate-400 hover:text-red-500 p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg" title="Eliminar">
                                             <Icon name="trash-2" size={16} />
                                         </button>
                                     )}
@@ -479,64 +575,68 @@ const App = () => {
                                     </div>
                                 )}
 
-                                <div className="space-y-4">
+                                <div className="space-y-3">
+                                    {item.service && item.type !== ENTRY_TYPES.NOTE && (
+                                        <FieldRow
+                                            label="Serviço"
+                                            display={item.service}
+                                            copyText={item.service}
+                                            copyLabel="Serviço"
+                                            onCopy={copy}
+                                        />
+                                    )}
+
                                     {item.type === ENTRY_TYPES.LOGIN && (
                                         <>
-                                            <div className="flex justify-between items-center">
-                                                <div className="overflow-hidden">
-                                                    <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Utilizador</p>
-                                                    <p className="text-sm font-medium truncate">{item.username}</p>
-                                                </div>
-                                                <button onClick={() => copy(item.username, 'Utilizador')} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-400">
-                                                    <Icon name="copy" size={14}/>
-                                                </button>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <div>
-                                                    <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Senha</p>
-                                                    <p className="text-sm font-mono tracking-widest">••••••••••••</p>
-                                                </div>
-                                                <button onClick={() => copy(item.password, 'Senha')} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-400">
-                                                    <Icon name="copy" size={14}/>
-                                                </button>
-                                            </div>
+                                            <FieldRow label="Utilizador" display={item.username} copyText={item.username} copyLabel="Utilizador" onCopy={copy} />
+                                            <FieldRow label="Senha" display={item.password} copyText={item.password} copyLabel="Senha" onCopy={copy} masked />
+                                            <button
+                                                type="button"
+                                                onClick={() => copyLoginAll(item)}
+                                                className="w-full flex items-center justify-center gap-2 text-[10px] font-bold uppercase py-2 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-600 transition-colors"
+                                            >
+                                                <Icon name="copy" size={12} /> Copiar tudo
+                                            </button>
                                         </>
                                     )}
 
                                     {item.type === ENTRY_TYPES.API_KEY && (
-                                        <div className="flex justify-between items-center">
-                                            <div className="overflow-hidden">
-                                                <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">API Key</p>
-                                                <p className="text-sm font-mono truncate bg-slate-50 dark:bg-slate-900/50 px-2 py-1 rounded">{item.key?.substring(0, 10)}...</p>
-                                            </div>
-                                            <button onClick={() => copy(item.key, 'Chave API')} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-400">
-                                                <Icon name="copy" size={14}/>
-                                            </button>
-                                        </div>
+                                        <FieldRow label="API Key" display={`${item.key?.substring(0, 16)}...`} copyText={item.key} copyLabel="Chave API" onCopy={copy} />
                                     )}
 
                                     {item.type === ENTRY_TYPES.CONN_STRING && (
-                                        <div className="flex justify-between items-center">
-                                            <div className="overflow-hidden pr-2">
+                                        <div className="flex justify-between items-start gap-2">
+                                            <div className="overflow-hidden flex-1 min-w-0">
                                                 <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Connection String</p>
                                                 <p className="text-[11px] font-mono leading-relaxed break-all line-clamp-3 bg-slate-50 dark:bg-slate-900/50 p-2 rounded">{item.connectionString}</p>
                                             </div>
-                                            <button onClick={() => copy(item.connectionString, 'String')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-400 shrink-0">
-                                                <Icon name="copy" size={14}/>
-                                            </button>
+                                            <CopyButton compact label="String" onCopy={() => copy(item.connectionString, 'Connection String')} />
                                         </div>
                                     )}
 
                                     {item.type === ENTRY_TYPES.NOTE && (
-                                        <div>
-                                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-1.5">Conteúdo</p>
-                                            <div className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl max-h-40 overflow-y-auto custom-scrollbar whitespace-pre-wrap">
-                                                {item.content}
+                                        <>
+                                            <FieldRow label="Título" display={item.title} copyText={item.title} copyLabel="Título" onCopy={copy} />
+                                            <div>
+                                                <div className="flex justify-between items-center mb-1.5">
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase">Conteúdo</p>
+                                                    <CopyButton compact label="Conteúdo" onCopy={() => copy(item.content, 'Conteúdo')} />
+                                                </div>
+                                                <div className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl max-h-40 overflow-y-auto custom-scrollbar whitespace-pre-wrap">
+                                                    {item.content}
+                                                </div>
                                             </div>
-                                            <button onClick={() => copy(item.content, 'Anotação')} className="mt-3 w-full flex items-center justify-center gap-2 text-[10px] font-bold uppercase py-2 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-600">
-                                                <Icon name="copy" size={12}/> Copiar
-                                            </button>
-                                        </div>
+                                        </>
+                                    )}
+
+                                    {item.type !== ENTRY_TYPES.LOGIN && (
+                                        <button
+                                            type="button"
+                                            onClick={() => copyEntryAll(item)}
+                                            className="w-full flex items-center justify-center gap-2 text-[10px] font-bold uppercase py-2 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-600 transition-colors"
+                                        >
+                                            <Icon name="copy" size={12} /> Copiar tudo
+                                        </button>
                                     )}
                                 </div>
                             </div>
