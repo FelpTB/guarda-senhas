@@ -1,12 +1,16 @@
 {
   "name": "passvault-web",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "PassVault Pro - Gestor de senhas multiutilizador",
-  "main": "server/index.js",
+  "main": "main.js",
   "scripts": {
-    "build": "esbuild public/app.jsx --bundle --outfile=public/app.bundle.js --loader:.jsx=jsx --minify",
+    "build:web": "esbuild public/app.jsx --bundle --outfile=public/app.bundle.js --loader:.jsx=jsx --minify",
+    "build:desktop": "esbuild desktop/legacy.jsx --bundle --outfile=legacy.bundle.js --loader:.jsx=jsx --minify",
+    "build": "npm run build:web && npm run build:desktop",
     "start": "node server/index.js",
-    "dev": "npm run build && node --watch server/index.js"
+    "dev": "npm run build:web && node --watch server/index.js",
+    "electron": "npm run build:desktop && electron .",
+    "dist": "npm run build:desktop && electron-builder"
   },
   "engines": {
     "node": ">=18"
@@ -25,5 +29,17 @@
   "devDependencies": {
     "electron": "^28.0.0",
     "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.passvault.app",
+    "productName": "PassVault Pro",
+    "files": [
+      "main.js",
+      "index.html",
+      "legacy.bundle.js"
+    ],
+    "win": {
+      "target": "portable"
+    }
   }
 }

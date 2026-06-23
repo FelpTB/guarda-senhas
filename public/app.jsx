@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
     Shield, X, UserX, KeyRound, Search, LogOut, Plus, Layers, User, Globe, Users,
-    FolderOpen, Trash2, Code2, Database, StickyNote, UserCircle, Copy, CheckCircle, Lock
+    FolderOpen, Trash2, Code2, Database, StickyNote, UserCircle, Copy, CheckCircle, Lock, Upload
 } from 'lucide-react';
 
 const ENTRY_TYPES = {
@@ -77,7 +77,22 @@ const ICONS = {
     copy: Copy,
     'check-circle': CheckCircle,
     lock: Lock,
+    upload: Upload,
 };
+
+function normalizeImportItem(raw) {
+    return {
+        type: raw.type || ENTRY_TYPES.LOGIN,
+        visibility: raw.visibility === 'public' ? VISIBILITY.PUBLIC : VISIBILITY.PERSONAL,
+        service: raw.service || null,
+        username: raw.username || null,
+        password: raw.password || null,
+        key: raw.key || null,
+        connectionString: raw.connectionString || null,
+        title: raw.title || null,
+        content: raw.content || null,
+    };
+}
 
 const Icon = ({ name, size = 18, className = "" }) => {
     const Cmp = ICONS[name];
@@ -327,6 +342,8 @@ const App = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [permissionsEntry, setPermissionsEntry] = useState(null);
     const [notification, setNotification] = useState(null);
+    const [importing, setImporting] = useState(false);
+    const importInputRef = React.useRef(null);
 
     const [formType, setFormType] = useState(ENTRY_TYPES.LOGIN);
     const [formVisibility, setFormVisibility] = useState(VISIBILITY.PERSONAL);
@@ -400,6 +417,35 @@ const App = () => {
         api.setToken(null);
         setUser(null);
         setItems([]);
+    };
+
+    const handleImportFile = async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+
+        setImporting(true);
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+            const list = Array.isArray(data) ? data : data.items;
+            if (!Array.isArray(list) || list.length === 0) {
+                throw new Error('Ficheiro inválido ou vazio.');
+            }
+
+            let imported = 0;
+            for (const raw of list) {
+                await api.createEntry(normalizeImportItem(raw));
+                imported++;
+            }
+
+            await loadEntries(filter);
+            showNotification(`${imported} registos importados com sucesso!`);
+        } catch (err) {
+            showNotification(err.message || 'Erro ao importar ficheiro.');
+        } finally {
+            setImporting(false);
+        }
     };
 
     const handleSave = async (e) => {
@@ -485,6 +531,15 @@ const App = () => {
                 </div>
 
                 <div className="flex items-center gap-3">
+                    <input ref={importInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportFile} />
+                    <button
+                        onClick={() => importInputRef.current?.click()}
+                        disabled={importing}
+                        className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors disabled:opacity-50"
+                        title="Importar do app desktop (JSON)"
+                    >
+                        <Icon name="upload" />
+                    </button>
                     <button onClick={handleLogout} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors" title="Sair">
                         <Icon name="log-out" />
                     </button>
