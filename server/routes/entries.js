@@ -149,6 +149,53 @@ router.post('/', async (req, res) => {
   }
 });
 
+router.put('/:id', async (req, res) => {
+  try {
+    const entry = await canAccessEntry(req.params.id, req.user.id);
+    if (!entry) {
+      return res.status(404).json({ error: 'Registo não encontrado.' });
+    }
+    if (!entry.is_owner) {
+      return res.status(403).json({ error: 'Apenas o proprietário pode editar.' });
+    }
+
+    const { type, visibility, service, username, password, key, connectionString, title, content } = req.body;
+
+    if (!type) {
+      return res.status(400).json({ error: 'Tipo de registo obrigatório.' });
+    }
+    if (!['public', 'personal'].includes(visibility)) {
+      return res.status(400).json({ error: 'Visibilidade inválida.' });
+    }
+
+    const result = await pool.query(
+      `UPDATE entries
+       SET type = $1, visibility = $2, service = $3, username = $4, password = $5,
+           key = $6, connection_string = $7, title = $8, content = $9, updated_at = NOW()
+       WHERE id = $10 AND user_id = $11
+       RETURNING *`,
+      [type, visibility, service || null, username || null, password || null, key || null, connectionString || null, title || null, content || null, req.params.id, req.user.id]
+    );
+
+    if (!result.rows[0]) {
+      return res.status(404).json({ error: 'Registo não encontrado.' });
+    }
+
+    const userResult = await pool.query('SELECT username, display_name FROM users WHERE id = $1', [req.user.id]);
+    const owner = userResult.rows[0];
+
+    res.json(mapEntry({
+      ...result.rows[0],
+      is_owner: true,
+      owner_username: owner.username,
+      owner_display_name: owner.display_name,
+    }));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao atualizar registo.' });
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const entry = await canAccessEntry(req.params.id, req.user.id);

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
     Shield, X, UserX, KeyRound, Search, LogOut, Plus, Layers, User, Globe, Users,
-    FolderOpen, Trash2, Code2, Database, StickyNote, UserCircle, Copy, CheckCircle, Lock, Upload
+    FolderOpen, Trash2, Code2, Database, StickyNote, UserCircle, Copy, CheckCircle, Lock, Upload, Pencil
 } from 'lucide-react';
 
 const ENTRY_TYPES = {
@@ -49,6 +49,7 @@ const api = {
     me() { return this.request('/auth/me'); },
     getEntries(filter) { return this.request(`/entries?filter=${filter || 'all'}`); },
     createEntry(body) { return this.request('/entries', { method: 'POST', body: JSON.stringify(body) }); },
+    updateEntry(id, body) { return this.request(`/entries/${id}`, { method: 'PUT', body: JSON.stringify(body) }); },
     deleteEntry(id) { return this.request(`/entries/${id}`, { method: 'DELETE' }); },
     getPermissions(id) { return this.request(`/entries/${id}/permissions`); },
     grantPermission(id, username) { return this.request(`/entries/${id}/permissions`, { method: 'POST', body: JSON.stringify({ username }) }); },
@@ -78,6 +79,7 @@ const ICONS = {
     'check-circle': CheckCircle,
     lock: Lock,
     upload: Upload,
+    pencil: Pencil,
 };
 
 function normalizeImportItem(raw) {
@@ -340,6 +342,7 @@ const App = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [filter, setFilter] = useState(FILTERS.ALL);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingEntry, setEditingEntry] = useState(null);
     const [permissionsEntry, setPermissionsEntry] = useState(null);
     const [notification, setNotification] = useState(null);
     const [importing, setImporting] = useState(false);
@@ -448,25 +451,65 @@ const App = () => {
         }
     };
 
+    const resetForm = () => {
+        setFormType(ENTRY_TYPES.LOGIN);
+        setFormVisibility(VISIBILITY.PERSONAL);
+        setFormData({ service: '', username: '', password: '', key: '', connectionString: '', title: '', content: '' });
+        setEditingEntry(null);
+    };
+
+    const openCreateModal = () => {
+        resetForm();
+        setIsModalOpen(true);
+    };
+
+    const openEditModal = (item) => {
+        setEditingEntry(item);
+        setFormType(item.type);
+        setFormVisibility(item.visibility);
+        setFormData({
+            service: item.service || '',
+            username: item.username || '',
+            password: item.password || '',
+            key: item.key || '',
+            connectionString: item.connectionString || '',
+            title: item.title || '',
+            content: item.content || '',
+        });
+        setIsModalOpen(true);
+    };
+
+    const closeModal = () => {
+        setIsModalOpen(false);
+        resetForm();
+    };
+
     const handleSave = async (e) => {
         e.preventDefault();
+        const payload = {
+            type: formType,
+            visibility: formVisibility,
+            service: formData.service,
+            username: formData.username,
+            password: formData.password,
+            key: formData.key,
+            connectionString: formData.connectionString,
+            title: formData.title,
+            content: formData.content
+        };
+
         try {
-            const entry = await api.createEntry({
-                type: formType,
-                visibility: formVisibility,
-                service: formData.service,
-                username: formData.username,
-                password: formData.password,
-                key: formData.key,
-                connectionString: formData.connectionString,
-                title: formData.title,
-                content: formData.content
-            });
-            setItems(prev => [entry, ...prev]);
-            setIsModalOpen(false);
-            setFormData({ service: '', username: '', password: '', key: '', connectionString: '', title: '', content: '' });
-            setFormVisibility(VISIBILITY.PERSONAL);
-            showNotification("Registo guardado com sucesso!");
+            if (editingEntry) {
+                const entry = await api.updateEntry(editingEntry.id, payload);
+                setItems(prev => prev.map(i => i.id === entry.id ? entry : i));
+                closeModal();
+                showNotification('Registo atualizado com sucesso!');
+            } else {
+                const entry = await api.createEntry(payload);
+                setItems(prev => [entry, ...prev]);
+                closeModal();
+                showNotification('Registo guardado com sucesso!');
+            }
         } catch (err) {
             showNotification(err.message);
         }
@@ -543,7 +586,7 @@ const App = () => {
                     <button onClick={handleLogout} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors" title="Sair">
                         <Icon name="log-out" />
                     </button>
-                    <button onClick={() => setIsModalOpen(true)}
+                    <button onClick={openCreateModal}
                         className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-md shadow-indigo-500/20">
                         <Icon name="plus" size={18} /> <span className="hidden sm:inline">Adicionar</span>
                     </button>
@@ -584,6 +627,11 @@ const App = () => {
                         {filteredItems.map(item => (
                             <div key={item.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all relative group">
                                 <div className="absolute top-4 right-4 flex gap-1">
+                                    {item.isOwner && (
+                                        <button onClick={() => openEditModal(item)} className="text-slate-400 hover:text-indigo-500 p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg" title="Editar">
+                                            <Icon name="pencil" size={16} />
+                                        </button>
+                                    )}
                                     {item.isOwner && item.visibility === VISIBILITY.PERSONAL && (
                                         <button onClick={() => setPermissionsEntry(item)} className="text-slate-400 hover:text-indigo-500 p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg" title="Gerir permissões">
                                             <Icon name="users" size={16} />
@@ -704,8 +752,8 @@ const App = () => {
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md">
                     <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto custom-scrollbar">
                         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-800">
-                            <h3 className="font-bold text-lg">Criar Novo Registo</h3>
-                            <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                            <h3 className="font-bold text-lg">{editingEntry ? 'Editar Registo' : 'Criar Novo Registo'}</h3>
+                            <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 p-1">
                                 <Icon name="x" size={24} />
                             </button>
                         </div>
@@ -808,8 +856,10 @@ const App = () => {
                             )}
 
                             <div className="flex gap-3 pt-4">
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold">Cancelar</button>
-                                <button type="submit" className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg">Guardar</button>
+                                <button type="button" onClick={closeModal} className="flex-1 py-3 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold">Cancelar</button>
+                                <button type="submit" className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg">
+                                    {editingEntry ? 'Guardar Alterações' : 'Guardar Registo'}
+                                </button>
                             </div>
                         </form>
                     </div>
