@@ -38,21 +38,46 @@ const App = () => {
         service: '', username: '', password: '', key: '', connectionString: '', title: '', content: ''
     });
 
+    const showNotification = (message) => {
+        setNotification(message);
+        setTimeout(() => setNotification(null), 2500);
+    };
+
     useEffect(() => {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-            try { setItems(JSON.parse(saved)); } catch (e) { console.error('Erro ao carregar dados', e); }
-        }
+        const loadData = async () => {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        setItems(parsed);
+                        return;
+                    }
+                } catch (e) {
+                    console.error('Erro ao carregar dados', e);
+                }
+            }
+
+            if (window.passvault?.getRecoveredData) {
+                try {
+                    const recovered = await window.passvault.getRecoveredData();
+                    if (Array.isArray(recovered) && recovered.length > 0) {
+                        setItems(recovered);
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(recovered));
+                        showNotification(`${recovered.length} registos recuperados do cofre antigo!`);
+                    }
+                } catch (e) {
+                    console.error('Erro ao recuperar dados antigos', e);
+                }
+            }
+        };
+
+        loadData();
     }, []);
 
     useEffect(() => {
         if (!isLocked) localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
     }, [items, isLocked]);
-
-    const showNotification = (message) => {
-        setNotification(message);
-        setTimeout(() => setNotification(null), 2500);
-    };
 
     const copy = (text, label) => {
         navigator.clipboard?.writeText(text).catch(() => {
